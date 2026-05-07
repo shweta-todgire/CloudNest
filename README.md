@@ -50,16 +50,8 @@ npm install
 cp .env.local.example .env.local
 ```
 
-Edit `.env.local` and fill in your Firebase config:
+Edit `.env.local` and fill in your Firebase config
 
-```env
-NEXT_PUBLIC_FIREBASE_API_KEY=AIza...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=123456789
-NEXT_PUBLIC_FIREBASE_APP_ID=1:123:web:abc123
-```
 
 ### 4. Apply Security Rules
 
