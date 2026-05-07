@@ -169,7 +169,7 @@ export function TrashView() {
                       file.id,
                       file.name,
                       file.size ?? 0,
-                      file.storagePath
+                      file.storagePath ?? undefined
                     )
                   }
                     className="text-red-600 text-xs px-2 py-1 rounded bg-red-50"
