@@ -44,11 +44,12 @@ export function TrashView() {
     )
       return
 
-    await permanentlyDelete(id, storagePath)
+    // ✅ FIX: handle undefined safely
+    await permanentlyDelete(id, storagePath ?? '')
 
     toast.success(`"${name}" permanently deleted`)
   }
-
+  
   const handleEmptyTrash = async () => {
     if (!user) return'use client'
 
