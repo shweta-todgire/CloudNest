@@ -40,17 +40,22 @@ export function TrashView() {
     fileSize: number,
     storagePath?: string
   ) => {
-    if (!user) return
+    if (!user) return;
+
+    if (!storagePath) {
+      toast.error("Missing file storage path");
+      return;
+    }
 
     await permanentlyDelete(
       id,
       user.uid,
       fileSize,
       storagePath
-    )
+    );
 
-    toast.success(`"${name}" permanently deleted`)
-  }
+    toast.success(`"${name}" permanently deleted`);
+  };
 
   // ---------------- EMPTY TRASH ----------------
   const handleEmptyTrash = async () => {
@@ -169,7 +174,7 @@ export function TrashView() {
                       file.id,
                       file.name,
                       file.size ?? 0,
-                      file.storagePath ?? undefined
+                      file.storagePath
                     )
                   }
                     className="text-red-600 text-xs px-2 py-1 rounded bg-red-50"
