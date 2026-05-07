@@ -33,28 +33,23 @@ export function TrashView() {
   }
 
   // ---------------- DELETE ----------------
+  
   const handleDelete = async (
     id: string,
     name: string,
     fileSize: number,
     storagePath?: string
   ) => {
-    if (!confirm(`Permanently delete "${name}"?`)) return
-
     if (!user) return
 
-    try {
-      await permanentlyDelete(
-        id,
-        user.uid,
-        fileSize ?? 0,
-        storagePath
-      )
+    await permanentlyDelete(
+      id,
+      user.uid,
+      fileSize,
+      storagePath
+    )
 
-      toast.success(`"${name}" deleted`)
-    } catch {
-      toast.error('Delete failed')
-    }
+    toast.success(`"${name}" permanently deleted`)
   }
 
   // ---------------- EMPTY TRASH ----------------
@@ -173,7 +168,7 @@ export function TrashView() {
                     handleDelete(
                       file.id,
                       file.name,
-                      file.size,
+                      file.size ?? 0,
                       file.storagePath
                     )
                   }
