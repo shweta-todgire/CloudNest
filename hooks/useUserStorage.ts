@@ -1,24 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
-import {
-  doc,
-  onSnapshot,
-} from 'firebase/firestore'
-
+import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 
-const DEFAULT_LIMIT =
-  15 * 1024 * 1024 * 1024 // 15GB
+const DEFAULT_LIMIT = 15 * 1024 * 1024 * 1024 // 15GB
 
-export function useUserStorage(
-  userId?: string
-) {
+export function useUserStorage(userId?: string) {
   const [used, setUsed] = useState(0)
-
-  const [limit, setLimit] =
-    useState(DEFAULT_LIMIT)
+  const [limit, setLimit] = useState(DEFAULT_LIMIT)
 
   useEffect(() => {
     if (!userId) {
@@ -38,17 +28,8 @@ export function useUserStorage(
 
         const data = snap.data()
 
-        setUsed(
-          typeof data.storageUsed === 'number'
-            ? data.storageUsed
-            : 0
-        )
-
-        setLimit(
-          typeof data.storageLimit === 'number'
-            ? data.storageLimit
-            : DEFAULT_LIMIT
-        )
+        setUsed(Number(data.storageUsed ?? 0))
+        setLimit(Number(data.storageLimit ?? DEFAULT_LIMIT))
       },
       () => {
         setUsed(0)
@@ -59,8 +40,5 @@ export function useUserStorage(
     return () => unsub()
   }, [userId])
 
-  return {
-    used,
-    limit,
-  }
+  return { used, limit }
 }

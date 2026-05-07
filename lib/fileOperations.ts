@@ -282,38 +282,48 @@ export async function restoreFromTrash(fileId: string) {
 export async function permanentlyDelete(
   fileId: string,
   userId: string,
-  fileSize: number = 0,
-  storagePath?: string,
+  fileSize?: number,
+  storagePath?: string
 ) {
   try {
+    // 1. delete from Firebase Storage first
     if (storagePath) {
-      await deleteObject(ref(storage, storagePath))
+      try {
+        await deleteObject(ref(storage, storagePath))
+      } catch (err) {
+        console.log('Storage delete failed:', err)
+      }
+    }
+
+    // 2. delete Firestore document
+    const fileRef = doc(db, FILES_COLLECTION, fileId)
+    const fileSnap = await getDoc(fileRef)
+
+    if (!fileSnap.exists()) return
+
+    const data = fileSnap.data()
+    const sizeToRemove =
+      typeof data.size === 'number'
+        ? data.size
+        : fileSize || 0
+
+    await deleteDoc(fileRef)
+
+    // 3. update user storage SAFELY
+    const userRef = doc(db, 'users', userId)
+    const userSnap = await getDoc(userRef)
+
+    if (userSnap.exists()) {
+      const current = Number(userSnap.data().storageUsed || 0)
+
+      await updateDoc(userRef, {
+        storageUsed: Math.max(current - sizeToRemove, 0),
+      })
     }
   } catch (err) {
-    console.error(err)
+    console.error('permanentlyDelete error:', err)
   }
-
-  const userRef = doc(db, 'users', userId)
-
-  const userSnap = await getDoc(userRef)
-
-  if (userSnap.exists()) {
-    const currentStorage =
-      userSnap.data().storageUsed || 0
-
-    const newStorage = Math.max(
-      currentStorage - fileSize,
-      0
-    )
-
-    await updateDoc(userRef, {
-      storageUsed: newStorage,
-    })
-  }
-
-  await deleteDoc(doc(db, FILES_COLLECTION, fileId))
 }
-
 /* ─────────────────────────────────────────────────────────────
    EMPTY TRASH
 ───────────────────────────────────────────────────────────── */

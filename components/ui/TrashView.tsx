@@ -9,7 +9,6 @@ import {
 } from 'lucide-react'
 
 import { useDriveStore } from '@/store/driveStore'
-
 import {
   restoreFromTrash,
   permanentlyDelete,
@@ -17,116 +16,85 @@ import {
 } from '@/lib/fileOperations'
 
 import { getFileIcon } from '@/lib/utils'
-
 import toast from 'react-hot-toast'
 import { EmptyState } from './EmptyState'
 
 export function TrashView() {
   const { files, user } = useDriveStore()
 
-  const handleRestore = async (
-    id: string,
-    name: string
-  ) => {
-    await restoreFromTrash(id)
-    toast.success(`"${name}" restored`)
-  }
-
-  const handleDelete = async (
-    id: string,
-    name: string,
-    storagePath?: string
-  ) => {
-    if (
-      !confirm(
-        `Permanently delete "${name}"? This cannot be undone.`
-      )
-    )
-      return
-
-    // ✅ FIX: handle undefined safely
-    await permanentlyDelete(id, storagePath ?? '')
-
-    toast.success(`"${name}" permanently deleted`)
-  }
-  
-  const handleEmptyTrash = async () => {
-    if (!user) return'use client'
-
-import { format } from 'date-fns'
-import {
-  Trash2,
-  RotateCcw,
-  AlertTriangle,
-  Folder,
-} from 'lucide-react'
-
-import { useDriveStore } from '@/store/driveStore'
-
-import {
-  restoreFromTrash,
-  permanentlyDelete,
-  emptyTrash,
-} from '@/lib/fileOperations'
-
-import { getFileIcon } from '@/lib/utils'
-
-import toast from 'react-hot-toast'
-import { EmptyState } from './EmptyState'
-
-export function TrashView() {
-  const { files, user } = useDriveStore()
-
+  // ---------------- RESTORE ----------------
   const handleRestore = async (id: string, name: string) => {
-    await restoreFromTrash(id)
-    toast.success(`"${name}" restored`)
+    try {
+      await restoreFromTrash(id)
+      toast.success(`"${name}" restored`)
+    } catch {
+      toast.error('Failed to restore file')
+    }
   }
 
+  // ---------------- DELETE ----------------
   const handleDelete = async (
     id: string,
     name: string,
+    fileSize: number,
     storagePath?: string
   ) => {
-    if (
-      !confirm(
-        `Permanently delete "${name}"? This cannot be undone.`
+    if (!confirm(`Permanently delete "${name}"?`)) return
+
+    if (!user) return
+
+    try {
+      await permanentlyDelete(
+        id,
+        user.uid,
+        fileSize ?? 0,
+        storagePath
       )
-    )
-      return
 
-    // ✅ FIX: guard against undefined
-    if (!storagePath) {
-      toast.error('File path missing, cannot delete')
-      return
+      toast.success(`"${name}" deleted`)
+    } catch {
+      toast.error('Delete failed')
     }
-
-    await permanentlyDelete(id, storagePath)
-
-    toast.success(`"${name}" permanently deleted`)
   }
 
+  // ---------------- EMPTY TRASH ----------------
   const handleEmptyTrash = async () => {
     if (!user) return
 
-    if (
-      !confirm(
-        'Permanently delete all items in trash? This cannot be undone.'
-      )
-    )
-      return
+    if (!confirm('Delete ALL trash items permanently?')) return
 
-    await emptyTrash(user.uid)
-
-    toast.success('Trash emptied')
+    try {
+      await emptyTrash(user.uid)
+      toast.success('Trash emptied')
+    } catch {
+      toast.error('Failed to empty trash')
+    }
   }
 
-  if (files.length === 0) {
+  // ---------------- DATE FIX (IMPORTANT) ----------------
+  const getDate = (ts: any) => {
+    if (!ts) return null
+
+    // Firestore Timestamp
+    if (typeof ts === 'object' && 'toDate' in ts) {
+      return ts.toDate()
+    }
+
+    // Already JS Date
+    if (ts instanceof Date) return ts
+
+    // string/number fallback
+    const d = new Date(ts)
+    return isNaN(d.getTime()) ? null : d
+  }
+
+  if (!files?.length) {
     return <EmptyState section="trash" />
   }
 
   return (
     <div>
-      {/* Header */}
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {files.length} item{files.length !== 1 ? 's' : ''} in trash
@@ -134,61 +102,44 @@ export function TrashView() {
 
         <button
           onClick={handleEmptyTrash}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400"
         >
           <Trash2 className="w-3.5 h-3.5" />
           Empty trash
         </button>
       </div>
 
-      {/* Warning */}
+      {/* WARNING */}
       <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 flex items-center gap-2 mb-4 text-sm text-amber-700 dark:text-amber-400">
-        <AlertTriangle className="w-4 h-4 shrink-0" />
-        Items in trash will be permanently deleted after 30 days
+        <AlertTriangle className="w-4 h-4" />
+        Items will be permanently deleted after 30 days
       </div>
 
-      {/* Files */}
-      <div className="rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
-        <div className="divide-y divide-gray-50 dark:divide-gray-800">
+      {/* FILE LIST */}
+      <div className="rounded-xl border border-gray-100 dark:border-gray-800">
+        <div className="divide-y divide-gray-100 dark:divide-gray-800">
+
           {files.map((file) => {
-            const deletedDate =
-              file.trashedAt &&
-              !isNaN(
-                new Date(
-                  file.trashedAt?.toDate
-                    ? file.trashedAt.toDate()
-                    : file.trashedAt
-                ).getTime()
-              )
-                ? format(
-                    new Date(
-                      file.trashedAt?.toDate
-                        ? file.trashedAt.toDate()
-                        : file.trashedAt
-                    ),
-                    'MMM d, yyyy'
-                  )
-                : 'recently'
+            const dateObj = getDate(file.trashedAt)
+
+            const deletedDate = dateObj
+              ? format(dateObj, 'MMM d, yyyy')
+              : 'recently'
 
             return (
               <div
                 key={file.id}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40"
               >
-                {/* Icon / Preview */}
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
+                {/* ICON */}
+                <div className="w-10 h-10 flex items-center justify-center">
                   {file.type === 'folder' ? (
-                    <Folder
-                      className="w-6 h-6 text-blue-400"
-                      fill="currentColor"
-                      strokeWidth={1}
-                    />
-                  ) : file.mimeType?.startsWith('image/') &&
-                    file.url ? (
+                    <Folder className="w-6 h-6 text-blue-400" />
+                  ) : file.mimeType?.startsWith('image/') && file.url ? (
                     <img
                       src={file.url}
                       alt={file.name}
-                      className="w-10 h-10 object-cover rounded-md border border-gray-200 dark:border-gray-700"
+                      className="w-10 h-10 object-cover rounded-md"
                     />
                   ) : (
                     <span className="text-xl">
@@ -197,145 +148,43 @@ export function TrashView() {
                   )}
                 </div>
 
-                {/* Info */}
+                {/* INFO */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate line-through opacity-60">
+                  <p className="truncate line-through text-sm text-gray-900 dark:text-gray-100">
                     {file.name}
                   </p>
 
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                  <p className="text-xs text-gray-400">
                     Deleted {deletedDate}
                   </p>
                 </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-1.5">
+                {/* ACTIONS */}
+                <div className="flex gap-2">
                   <button
-                    onClick={() =>
-                      handleRestore(file.id, file.name)
-                    }
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors"
+                    onClick={() => handleRestore(file.id, file.name)}
+                    className="text-green-600 text-xs px-2 py-1 rounded bg-green-50"
                   >
-                    <RotateCcw className="w-3 h-3" />
                     Restore
                   </button>
 
                   <button
-                    onClick={() =>
-                      handleDelete(
-                        file.id,
-                        file.name,
-                        file.storagePath
-                      )
-                    }
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
+                   onClick={() =>
+                    handleDelete(
+                      file.id,
+                      file.name,
+                      file.size,
+                      file.storagePath
+                    )
+                  }
+                    className="text-red-600 text-xs px-2 py-1 rounded bg-red-50"
                   >
-                    <Trash2 className="w-3 h-3" />
-                    Delete forever
+                    Delete
                   </button>
                 </div>
               </div>
             )
           })}
-        </div>
-      </div>
-    </div>
-  )
-}
-      {/* Files */}
-      <div className="rounded-xl border border-gray-100 dark:border-gray-800 overflow-hidden">
-        <div className="divide-y divide-gray-50 dark:divide-gray-800">
-
-          {files.map((file) => {
-            const deletedDate =
-              file.trashedAt &&
-              !isNaN(
-                new Date(
-                  file.trashedAt?.toDate
-                    ? file.trashedAt.toDate()
-                    : file.trashedAt
-                ).getTime()
-              )
-                ? format(
-                    new Date(
-                      file.trashedAt?.toDate
-                        ? file.trashedAt.toDate()
-                        : file.trashedAt
-                    ),
-                    'MMM d, yyyy'
-                  )
-                : 'recently'
-
-            return (
-              <div
-                key={file.id}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors"
-              >
-                {/* Icon / Preview */}
-                <div className="w-10 h-10 flex items-center justify-center shrink-0">
-
-                  {file.type === 'folder' ? (
-                    <Folder
-                      className="w-6 h-6 text-blue-400"
-                      fill="currentColor"
-                      strokeWidth={1}
-                    />
-                  ) : file.mimeType?.startsWith('image/') &&
-                    file.url ? (
-                    <img
-                      src={file.url}
-                      alt={file.name}
-                      className="w-10 h-10 object-cover rounded-md border border-gray-200 dark:border-gray-700"
-                    />
-                  ) : (
-                    <span className="text-xl">
-                      {getFileIcon(file.mimeType)}
-                    </span>
-                  )}
-
-                </div>
-
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate line-through opacity-60">
-                    {file.name}
-                  </p>
-
-                  <p className="text-xs text-gray-400 dark:text-gray-500">
-                    Deleted {deletedDate}
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() =>
-                      handleRestore(file.id, file.name)
-                    }
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-950/50 transition-colors"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    Restore
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      handleDelete(
-                        file.id,
-                        file.name,
-                        file.storagePath
-                      )
-                    }
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Delete forever
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-
         </div>
       </div>
     </div>
