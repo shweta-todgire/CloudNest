@@ -82,7 +82,7 @@ export function Sidebar() {
       'Signed out successfully'
     )
 
-    router.replace('/auth')
+    router.replace('/auth/login')
   }
 
   /* DRIVE NAV */
