@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+
 const nextConfig = {
   reactStrictMode: true,
 
@@ -7,6 +8,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
       },
     ],
   },
@@ -17,7 +22,7 @@ const nextConfig = {
         source: '/:path*',
 
         headers: [
-          // GOOGLE AUTH POPUP FIX
+          // GOOGLE AUTH FIX
           {
             key: 'Cross-Origin-Opener-Policy',
             value: 'same-origin-allow-popups',
@@ -28,20 +33,63 @@ const nextConfig = {
             value: 'unsafe-none',
           },
 
-          // CONTENT SECURITY POLICY
+          // CSP
           {
             key: 'Content-Security-Policy',
 
-            value:
-              "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com https://www.googleapis.com; " +
-              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-              "font-src 'self' https://fonts.gstatic.com https://*.gstatic.com data:; " +
-              "img-src 'self' data: blob: https: lh3.googleusercontent.com; " +
-              "connect-src 'self' https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://firebase.googleapis.com https://www.googleapis.com https://apis.google.com wss://*.firebaseio.com; " +
-              "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com; " +
-              "object-src 'none'; " +
-              "base-uri 'self';",
+            value: `
+              default-src 'self';
+
+              script-src
+                'self'
+                'unsafe-inline'
+                'unsafe-eval'
+                https://apis.google.com
+                https://accounts.google.com
+                https://www.gstatic.com
+                https://www.googleapis.com;
+
+              style-src
+                'self'
+                'unsafe-inline'
+                https://fonts.googleapis.com;
+
+              font-src
+                'self'
+                https://fonts.gstatic.com
+                https://*.gstatic.com
+                data:;
+
+              img-src
+                'self'
+                data:
+                blob:
+                https:
+                lh3.googleusercontent.com
+                https://firebasestorage.googleapis.com;
+
+              connect-src
+                'self'
+                https://identitytoolkit.googleapis.com
+                https://securetoken.googleapis.com
+                https://firestore.googleapis.com
+                https://firebase.googleapis.com
+                https://www.googleapis.com
+                https://apis.google.com
+                https://firebasestorage.googleapis.com
+                wss://*.firebaseio.com;
+
+              frame-src
+                'self'
+                https://accounts.google.com
+                https://*.firebaseapp.com;
+
+              object-src 'none';
+
+              base-uri 'self';
+            `
+              .replace(/\s{2,}/g, ' ')
+              .trim(),
           },
         ],
       },
