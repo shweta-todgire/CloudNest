@@ -1,3 +1,5 @@
+'use client'
+
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -8,6 +10,7 @@ import {
   updateProfile,
   updateEmail,
   deleteUser,
+  GoogleAuthProvider,
   User,
   UserCredential,
 } from 'firebase/auth'
@@ -21,7 +24,21 @@ import {
   serverTimestamp,
 } from 'firebase/firestore'
 
-import { auth, db, googleProvider } from './firebase'
+import { auth, db } from './firebase'
+
+/* =========================================================
+   GOOGLE PROVIDER
+========================================================= */
+
+const googleProvider = new GoogleAuthProvider()
+
+googleProvider.setCustomParameters({
+  prompt: 'select_account',
+})
+
+/* =========================================================
+   STORAGE LIMIT
+========================================================= */
 
 const STORAGE_LIMIT = 15 * 1024 * 1024 * 1024 // 15GB
 
@@ -42,63 +59,81 @@ export interface UserProfile {
 }
 
 /* =========================================================
-   CREATE USER PROFILE
+   CREATE / UPDATE USER PROFILE
 ========================================================= */
 
 async function createUserProfile(
   user: User,
   provider = 'email'
 ) {
-  const userRef = doc(db, 'users', user.uid)
+  try {
+    const userRef = doc(db, 'users', user.uid)
 
-  const snapshot = await getDoc(userRef)
+    const snapshot = await getDoc(userRef)
 
-  if (!snapshot.exists()) {
-    await setDoc(userRef, {
-      uid: user.uid,
-      email: user.email || '',
-      displayName:
-        user.displayName ||
-        user.email?.split('@')[0] ||
-        'User',
+    if (!snapshot.exists()) {
+      await setDoc(userRef, {
+        uid: user.uid,
 
-      photoURL: user.photoURL || '',
-
-      provider,
-
-      storageUsed: 0,
-      storageLimit: STORAGE_LIMIT,
-
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    })
-  } else {
-    const data = snapshot.data()
-
-    await setDoc(
-      userRef,
-      {
         email: user.email || '',
+
         displayName:
           user.displayName ||
-          data?.displayName ||
+          user.email?.split('@')[0] ||
           'User',
 
         photoURL: user.photoURL || '',
 
-        storageUsed: data?.storageUsed ?? 0,
-        storageLimit:
-          data?.storageLimit ?? STORAGE_LIMIT,
+        provider,
+
+        storageUsed: 0,
+
+        storageLimit: STORAGE_LIMIT,
+
+        createdAt: serverTimestamp(),
 
         updatedAt: serverTimestamp(),
-      },
-      { merge: true }
+      })
+    } else {
+      const data = snapshot.data()
+
+      await setDoc(
+        userRef,
+        {
+          email: user.email || '',
+
+          displayName:
+            user.displayName ||
+            data?.displayName ||
+            'User',
+
+          photoURL: user.photoURL || '',
+
+          provider,
+
+          storageUsed:
+            data?.storageUsed ?? 0,
+
+          storageLimit:
+            data?.storageLimit ??
+            STORAGE_LIMIT,
+
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      )
+    }
+  } catch (error) {
+    console.error(
+      'Create User Profile Error:',
+      error
     )
+    throw error
   }
 }
 
 /* =========================================================
-   SIGN UP
+   SIGN UP WITH EMAIL
 ========================================================= */
 
 export async function signUpWithEmail(
@@ -106,45 +141,69 @@ export async function signUpWithEmail(
   password: string,
   displayName: string
 ): Promise<UserCredential> {
-  const cred =
-    await createUserWithEmailAndPassword(
-      auth,
-      email,
-      password
+  try {
+    const cred =
+      await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      )
+
+    // update auth profile
+    await updateProfile(cred.user, {
+      displayName,
+    })
+
+    // send verification email
+    await sendEmailVerification(
+      cred.user
     )
 
-  // update firebase auth profile
-  await updateProfile(cred.user, {
-    displayName,
-  })
+    // create firestore profile
+    await createUserProfile(
+      cred.user,
+      'email'
+    )
 
-  // send verification email
-  await sendEmailVerification(cred.user)
-
-  // create firestore user
-  await createUserProfile(cred.user, 'email')
-
-  return cred
+    return cred
+  } catch (error) {
+    console.error(
+      'Signup Error:',
+      error
+    )
+    throw error
+  }
 }
 
 /* =========================================================
-   LOGIN
+   SIGN IN WITH EMAIL
 ========================================================= */
 
 export async function signInWithEmail(
   email: string,
   password: string
 ): Promise<UserCredential> {
-  const cred =
-    await signInWithEmailAndPassword(
-      auth,
-      email,
-      password
+  try {
+    const cred =
+      await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      )
+
+    await createUserProfile(
+      cred.user,
+      'email'
     )
 
-  await createUserProfile(cred.user, 'email')
-
-  return cred
+    return cred
+  } catch (error) {
+    console.error(
+      'Email Login Error:',
+      error
+    )
+    throw error
+  }
 }
 
 /* =========================================================
@@ -152,32 +211,71 @@ export async function signInWithEmail(
 ========================================================= */
 
 export async function signInWithGoogle(): Promise<UserCredential> {
-  const res = await signInWithPopup(
-    auth,
-    googleProvider
-  )
+  try {
+    const result =
+      await signInWithPopup(
+        auth,
+        googleProvider
+      )
 
-  await createUserProfile(res.user, 'google')
+    await createUserProfile(
+      result.user,
+      'google'
+    )
 
-  return res
+    return result
+  } catch (error) {
+    console.error(
+      'Google Login Error:',
+      error
+    )
+    throw error
+  }
 }
 
 /* =========================================================
    RESET PASSWORD
 ========================================================= */
 
-export const resetPassword = (
+export async function resetPassword(
   email: string
-) => sendPasswordResetEmail(auth, email)
+) {
+  try {
+    await sendPasswordResetEmail(
+      auth,
+      email
+    )
+  } catch (error) {
+    console.error(
+      'Reset Password Error:',
+      error
+    )
+    throw error
+  }
+}
 
 /* =========================================================
    SEND EMAIL VERIFICATION AGAIN
 ========================================================= */
 
 export async function sendVerificationMail() {
-  if (!auth.currentUser) return
+  try {
+    if (!auth.currentUser) {
+      throw new Error(
+        'No authenticated user'
+      )
+    }
 
-  await sendEmailVerification(auth.currentUser)
+    await sendEmailVerification(
+      auth.currentUser
+    )
+  } catch (error) {
+    console.error(
+      'Verification Email Error:',
+      error
+    )
+    throw error
+  }
 }
 
 /* =========================================================
@@ -187,19 +285,40 @@ export async function sendVerificationMail() {
 export async function updateUserName(
   name: string
 ) {
-  if (!auth.currentUser) return
-
-  await updateProfile(auth.currentUser, {
-    displayName: name,
-  })
-
-  await updateDoc(
-    doc(db, 'users', auth.currentUser.uid),
-    {
-      displayName: name,
-      updatedAt: serverTimestamp(),
+  try {
+    if (!auth.currentUser) {
+      throw new Error(
+        'No authenticated user'
+      )
     }
-  )
+
+    await updateProfile(
+      auth.currentUser,
+      {
+        displayName: name,
+      }
+    )
+
+    await updateDoc(
+      doc(
+        db,
+        'users',
+        auth.currentUser.uid
+      ),
+      {
+        displayName: name,
+
+        updatedAt:
+          serverTimestamp(),
+      }
+    )
+  } catch (error) {
+    console.error(
+      'Update Username Error:',
+      error
+    )
+    throw error
+  }
 }
 
 /* =========================================================
@@ -209,20 +328,43 @@ export async function updateUserName(
 export async function updateUserEmail(
   newEmail: string
 ) {
-  if (!auth.currentUser) return
-
-  await updateEmail(auth.currentUser, newEmail)
-
-  await updateDoc(
-    doc(db, 'users', auth.currentUser.uid),
-    {
-      email: newEmail,
-      updatedAt: serverTimestamp(),
+  try {
+    if (!auth.currentUser) {
+      throw new Error(
+        'No authenticated user'
+      )
     }
-  )
 
-  // send verification again
-  await sendEmailVerification(auth.currentUser)
+    await updateEmail(
+      auth.currentUser,
+      newEmail
+    )
+
+    await updateDoc(
+      doc(
+        db,
+        'users',
+        auth.currentUser.uid
+      ),
+      {
+        email: newEmail,
+
+        updatedAt:
+          serverTimestamp(),
+      }
+    )
+
+    // resend verification email
+    await sendEmailVerification(
+      auth.currentUser
+    )
+  } catch (error) {
+    console.error(
+      'Update Email Error:',
+      error
+    )
+    throw error
+  }
 }
 
 /* =========================================================
@@ -230,20 +372,46 @@ export async function updateUserEmail(
 ========================================================= */
 
 export async function deleteUserAccount() {
-  if (!auth.currentUser) return
+  try {
+    if (!auth.currentUser) {
+      throw new Error(
+        'No authenticated user'
+      )
+    }
 
-  const uid = auth.currentUser.uid
+    const uid =
+      auth.currentUser.uid
 
-  // delete firestore user doc
-  await deleteDoc(doc(db, 'users', uid))
+    // delete firestore user
+    await deleteDoc(
+      doc(db, 'users', uid)
+    )
 
-  // delete auth account
-  await deleteUser(auth.currentUser)
+    // delete auth user
+    await deleteUser(
+      auth.currentUser
+    )
+  } catch (error) {
+    console.error(
+      'Delete Account Error:',
+      error
+    )
+    throw error
+  }
 }
 
 /* =========================================================
    LOGOUT
 ========================================================= */
 
-export const signOutUser = () =>
-  signOut(auth)
+export async function signOutUser() {
+  try {
+    await signOut(auth)
+  } catch (error) {
+    console.error(
+      'Logout Error:',
+      error
+    )
+    throw error
+  }
+}
