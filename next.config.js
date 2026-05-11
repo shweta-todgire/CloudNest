@@ -22,7 +22,6 @@ const nextConfig = {
         source: '/:path*',
 
         headers: [
-          // GOOGLE AUTH FIX
           {
             key: 'Cross-Origin-Opener-Policy',
             value: 'same-origin-allow-popups',
@@ -33,7 +32,6 @@ const nextConfig = {
             value: 'unsafe-none',
           },
 
-          // CSP
           {
             key: 'Content-Security-Policy',
 
@@ -57,7 +55,6 @@ const nextConfig = {
               font-src
                 'self'
                 https://fonts.gstatic.com
-                https://*.gstatic.com
                 data:;
 
               img-src
@@ -65,8 +62,8 @@ const nextConfig = {
                 data:
                 blob:
                 https:
-                lh3.googleusercontent.com
-                https://firebasestorage.googleapis.com;
+                https://firebasestorage.googleapis.com
+                https://lh3.googleusercontent.com;
 
               connect-src
                 'self'
