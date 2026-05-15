@@ -1,5 +1,6 @@
 'use client'
-import { useEffect } from 'react'
+
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -8,11 +9,17 @@ import { UploadPanel } from '@/components/layout/UploadPanel'
 import { RenameModal } from '@/components/modals/RenameModal'
 import { NewFolderModal } from '@/components/modals/NewFolderModal'
 import { PreviewModal } from '@/components/modals/PreviewModal'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Menu, X } from 'lucide-react'
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const { user, authLoading } = useAuth()
   const router = useRouter()
+
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/auth')
@@ -35,13 +42,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden bg-white dark:bg-gray-950">
-      <Sidebar />
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div
+        className={`
+          fixed lg:static top-0 left-0 z-50 h-full
+          transform transition-transform duration-300 ease-in-out
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0
+        `}
+      >
+        <Sidebar />
+      </div>
+
+      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile Top Bar */}
+        <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950">
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+          >
+            {sidebarOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
+          </button>
+
+          <h1 className="font-semibold text-gray-900 dark:text-white">
+            CloudNest
+          </h1>
+
+          <div className="w-9" />
+        </div>
+
         <Header />
+
         <main className="flex-1 overflow-y-auto p-6 animate-fade-in">
           {children}
         </main>
       </div>
+
       <UploadPanel />
       <RenameModal />
       <NewFolderModal />
