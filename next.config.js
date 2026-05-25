@@ -9,9 +9,16 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
       },
+
       {
         protocol: 'https',
         hostname: 'firebasestorage.googleapis.com',
+      },
+
+      // ✅ SUPABASE
+      {
+        protocol: 'https',
+        hostname: 'zmopjroihvghadosimdy.supabase.co',
       },
     ],
   },
@@ -63,7 +70,8 @@ const nextConfig = {
                 blob:
                 https:
                 https://firebasestorage.googleapis.com
-                https://lh3.googleusercontent.com;
+                https://lh3.googleusercontent.com
+                https://zmopjroihvghadosimdy.supabase.co;
 
               connect-src
                 'self'
@@ -74,7 +82,8 @@ const nextConfig = {
                 https://www.googleapis.com
                 https://apis.google.com
                 https://firebasestorage.googleapis.com
-                wss://*.firebaseio.com;
+                wss://*.firebaseio.com
+                https://zmopjroihvghadosimdy.supabase.co;
 
               frame-src
                 'self'
@@ -90,8 +99,8 @@ const nextConfig = {
           },
         ],
       },
-    ];
+    ]
   },
-};
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig

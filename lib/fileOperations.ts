@@ -15,14 +15,9 @@ import {
   getDoc,
 } from 'firebase/firestore'
 
-import {
-  ref,
-  uploadBytesResumable,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage'
+import { db } from './firebase'
+import { supabase } from './supabase'
 
-import { db, storage } from './firebase'
 import { DriveFile } from '@/types'
 
 const FILES_COLLECTION = 'files'
@@ -165,77 +160,70 @@ export async function createFolder(
    FILE UPLOAD
 ───────────────────────────────────────────────────────────── */
 
-export function uploadFile(
+export async function uploadFile(
   userId: string,
   file: File,
   parentId: string | null | undefined,
   onProgress: (progress: number) => void,
 ): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const storagePath = `users/${userId}/${Date.now()}_${file.name}`
 
-    const storageRef = ref(storage, storagePath)
+  const storagePath = `users/${userId}/${Date.now()}_${file.name}`
 
-    const task = uploadBytesResumable(storageRef, file)
+  onProgress(20)
 
-    task.on(
-      'state_changed',
+  const { error } = await supabase.storage
+    .from('images')
+    .upload(storagePath, file)
 
-      (snap) => {
-        const pct = Math.round(
-          (snap.bytesTransferred / snap.totalBytes) * 100,
-        )
+  if (error) {
+    throw error
+  }
 
-        onProgress(pct)
-      },
+  onProgress(70)
 
-      reject,
+  const { data } = supabase.storage
+    .from('images')
+    .getPublicUrl(storagePath)
 
-      async () => {
-        try {
-          const url = await getDownloadURL(task.snapshot.ref)
+  const url = data.publicUrl
 
-          const docRef = await addDoc(
-            collection(db, FILES_COLLECTION),
-            {
-              name: file.name,
-              type: 'file',
+  onProgress(100)
 
-              mimeType: file.type,
-              size: file.size,
+  const docRef = await addDoc(
+    collection(db, FILES_COLLECTION),
+    {
+      name: file.name,
+      type: 'file',
 
-              url,
-              storagePath,
+      mimeType: file.type,
+      size: file.size,
 
-              parentId: parentId ?? null,
-              ownerId: userId,
+      url,
+      storagePath,
 
-              isStarred: false,
-              isTrashed: false,
+      parentId: parentId ?? null,
+      ownerId: userId,
 
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            },
-          )
+      isStarred: false,
+      isTrashed: false,
 
-          /* ✅ UPDATE STORAGE */
-          const userRef = doc(db, 'users', userId)
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    },
+  )
 
-          const userSnap = await getDoc(userRef)
+  /* UPDATE STORAGE */
+  const userRef = doc(db, 'users', userId)
 
-          if (userSnap.exists()) {
-            await updateDoc(userRef, {
-              storageUsed: increment(file.size),
-            })
-          }
+  const userSnap = await getDoc(userRef)
 
-          resolve(docRef.id)
-        } catch (err) {
-          reject(err)
-        }
-      },
-    )
-  })
+  if (userSnap.exists()) {
+    await updateDoc(userRef, {
+      storageUsed: increment(file.size),
+    })
+  }
+
+  return docRef.id
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -286,22 +274,27 @@ export async function permanentlyDelete(
   storagePath?: string
 ) {
   try {
-    // 1. delete from Firebase Storage first
+
+    // delete from Supabase Storage
     if (storagePath) {
       try {
-        await deleteObject(ref(storage, storagePath))
+        await supabase.storage
+          .from('images')
+          .remove([storagePath])
       } catch (err) {
         console.log('Storage delete failed:', err)
       }
     }
 
-    // 2. delete Firestore document
+    // delete Firestore document
     const fileRef = doc(db, FILES_COLLECTION, fileId)
+
     const fileSnap = await getDoc(fileRef)
 
     if (!fileSnap.exists()) return
 
     const data = fileSnap.data()
+
     const sizeToRemove =
       typeof data.size === 'number'
         ? data.size
@@ -309,26 +302,35 @@ export async function permanentlyDelete(
 
     await deleteDoc(fileRef)
 
-    // 3. update user storage SAFELY
+    // update user storage
     const userRef = doc(db, 'users', userId)
+
     const userSnap = await getDoc(userRef)
 
     if (userSnap.exists()) {
-      const current = Number(userSnap.data().storageUsed || 0)
+
+      const current =
+        Number(userSnap.data().storageUsed || 0)
 
       await updateDoc(userRef, {
-        storageUsed: Math.max(current - sizeToRemove, 0),
+        storageUsed: Math.max(
+          current - sizeToRemove,
+          0
+        ),
       })
     }
+
   } catch (err) {
     console.error('permanentlyDelete error:', err)
   }
 }
+
 /* ─────────────────────────────────────────────────────────────
    EMPTY TRASH
 ───────────────────────────────────────────────────────────── */
 
 export async function emptyTrash(userId: string) {
+
   const q = query(
     collection(db, FILES_COLLECTION),
     where('ownerId', '==', userId),
@@ -342,13 +344,17 @@ export async function emptyTrash(userId: string) {
   let totalDeletedSize = 0
 
   for (const d of snap.docs) {
+
     const data: any = d.data()
 
     totalDeletedSize += data.size || 0
 
+    // delete from Supabase Storage
     if (data.storagePath) {
       try {
-        await deleteObject(ref(storage, data.storagePath))
+        await supabase.storage
+          .from('images')
+          .remove([data.storagePath])
       } catch {}
     }
 
@@ -362,6 +368,7 @@ export async function emptyTrash(userId: string) {
   const userSnap = await getDoc(userRef)
 
   if (userSnap.exists()) {
+
     const currentStorage =
       userSnap.data().storageUsed || 0
 
@@ -395,6 +402,7 @@ export async function moveFile(
 ───────────────────────────────────────────────────────────── */
 
 export async function getFile(fileId: string) {
+
   const snap = await getDoc(
     doc(db, FILES_COLLECTION, fileId),
   )
